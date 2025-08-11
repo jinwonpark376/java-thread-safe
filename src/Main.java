@@ -1,11 +1,10 @@
 import static util.CustomLogger.log;
-import static util.ThreadUtils.sleep;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Main {
     public static void main(String[] args) throws InterruptedException {
-        BankAccount bankAccount = new BankAccountV1(1000);
+//        BankAccount bankAccount = new BankAccountV1(1000); // thread unsafe
+//        BankAccount bankAccount = new BankAccountV2(1000); // synchronized
+        BankAccount bankAccount = new BankAccountV3(1000); // lock
 
         Thread t1 = new Thread(new WithdrawTask(bankAccount, 800), "t1");
         Thread t2 = new Thread(new WithdrawTask(bankAccount, 800), "t2");
