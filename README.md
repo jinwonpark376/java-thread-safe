@@ -1,57 +1,66 @@
 # Thread-Safety in Java: Bank Account Example
 
-## 📌 개요
-멀티스레드 환경에서 **공유 자원(Shared Resource)** 에 동시에 접근하면 데이터 불일치(Data Inconsistency) 문제가 발생할 수 있습니다.  
+## 📌 Summary
+In a multi-threaded environment, simultaneous access to a shared resource can lead to data inconsistency issues.
 
-이 예제에서는 **은행 계좌(BankAccount)** 를 두 개의 스레드가 동시에 출금하려 할 때 발생하는 문제와, 이를 해결하는 방법을 비교합니다.
+This example compares different approaches to handling the situation where two threads attempt to withdraw from the same BankAccount simultaneously.
 
 ---
+## 1. Access Without Synchronization
 
-## 1. 문제 상황: 동기화 없이 접근
+- **Scenario**  
+  Two threads attempt to withdraw money from the same BankAccount object at the same time.
+- **Problem**  
+  Both threads may pass the **validation logic** (balance check) simultaneously, causing the account balance to go negative.
+- **Example(BankAccountV1)**
 
-- **상황**  
-  하나의 `BankAccount` 객체를 두 개의 스레드가 동시에 출금 요청.
-- **문제**  
-  두 스레드가 동시에 **검증 로직**(잔액 확인)을 통과하여 출금을 하면, 계좌 잔액이 음수가 될 수 있다.
-- **예시(BankAccountV1)**
+## 2. Using the `synchronized` keyword
 
-## 2. `synchronized` 키워드 사용
+- **Mechanism**  
+  Applying `synchronized` to a method or block ensures that **only one thread** can execute that code section at a time.
+- **Pros**  
+  - Easy to implement.
+  - Minimal code changes.
+- **Cons**  
+  - Threads may be forced into indefinite waiting. 
+  - Fairness issues (threads may not acquire the lock in order).
+- **Example(BankAccountV2)**
 
-- **원리**  
-  method 나 block에 `synchronized`를 적용하여 **한번에 하나의 스레드만** 해당 코드에 진입하도록 보장합니다.
-- **장점**  
-  구현이 간단하고, 코드 변경이 적다.
-- **단점**  
-  - 무한대기. 
-  - 공정성 문제.
-- **예시(BankAccountV2)**
+## 3. Using `Locks`
 
-## 3. Lock 사용
-
-- **원리**  
-  `synchronized`의 단점을 보완하여 Java 1.5부터 나온 Lock 인터페이스 사용.
-- **장점**  
-  - 다른 쓰레드가 이미 락을 획득 했다면, 락이 풀릴때까지 무한대기하는 문제는 tryLock을 통해 해결됨.
-  - ReentrantLock의 constructor에 true를 넣으면 공정모드를 제공한다. 이는 먼저 대기한 스레드가 먼저 락을 획득하도록 보장한다. 하지만 그로인해 성능이 저하될 수 있다.
+- **Mechanism**  
+  Introduced in Java 1.5 to improve from the drawbacks of `synchronized`.
+- **Pros**  
+  - `trylock` prevents indefinite waiting by allowing timeout-based lock attempts.
+  - `ReentrantLock` can be configured with **fair mode**, ensuring the longest-waiting thread acquires the lock first.
   
-- **단점**
-    - lock.unlock을 잘 지정하지 않으면 데드락 상황 발생.
-    - 공정성 해결 가능하나, 성능 저하 될 수 있음.
-- **예시(BankAccountV3)**
+- **Cons**
+    - If `lock.unlock()` is not properly placed, deadlock can occur.
+    - Fairness can be achieved, but it comes with reduced performance.
+- **Example(BankAccountV3)**
 
 ## 4. Atomic Operation. CAS(Compare-And-Set)
 
-- **원리**  
-  하드웨어에서 제공하는 **원자적 연산(Atomic Operation)**을 이용하여 락 없이 동시성을 보장.  
-  스레드 진입을 차단하지 않고 동시에 접근을 허용하지만, 내부 연산을 하드웨어 명령(CAS)으로 처리하여 Race Condition 방지.
-- **장점**
-    - 락 없이 동기화 보장하기 때문에 Context Switching 없어서 높은 성능.
-    - 단일 변수에 대한 읽기/갱신이 빈번한 경우 효율적.
-- **단점**
-    - 여러개의 공유 자원을 동시에 갱신해야 하는 경우 Lock 이나 다른 트랜잭션 매커니즘 필요
-      - 예를 들어 두 계좌간 송금(출금과 입금 모두 성공해야 함.)
-    - 경합이 매우 심한경우 CAS 실패 후 반복 재시도로 CPU 점유율이 높아질 수 있음.
-- **예시(BankAccountV4)**
-- 비고  
-  본 예제(BankAccountV4)에서는 “잔액 확인 → 차감” 과정을 CAS 루프로 구현하여, 락 없이도 원자성을 확보했습니다.
-     경합이 적은 환경에서 단일 값 갱신에는 매우 효율적입니다.
+- **Mechanism**  
+  Uses hardware-level **atomic operations** to ensure thread safety **without locks**. 
+  
+  Instead of blocking threads, concurrent access is allowed, but updates rely on hardware CAS instructions to avoid race conditions.
+- **Pros**
+    - **No Locks** → no context switching, resulting in high performance.
+    - Efficient for frequent read/update operations on a single variable.
+- **Cons**
+    - Not suitable for updating multiple shared resources simultaneously (e.g., transferring between two accounts requires both withdrawal and deposit).
+    - In high contention scenarios, repeated CAS retries may increase CPU usage.
+- **Example(BankAccountV4)**
+- Notes  
+  In this example, **BankAccountV4** implements the “balance check → deduction” process using a CAS loop, ensuring atomicity without locks.
+  This is highly efficient in low-contention environments where only single-value updates are required.
+
+## 5. Alternative Synchronization Approaches
+The above examples focus on single-server scenarios. In modern architectures, applications are often scaled horizontally, making concurrency issues more complex. Ensuring consistency across multiple nodes requires additional strategies, such as:
+
+- **Distributed Locks** (e.g., Redis, ZooKeeper)
+- **Database-Based Locks** (e.g., row-level locking, advisory locks)
+- **Optimistic Locking** (e.g., version fields, unique constraints)
+  
+Each method comes with trade-offs in complexity, performance, and fault tolerance, but they provide essential mechanisms for handling concurrency in distributed systems.
